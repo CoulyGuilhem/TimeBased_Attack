@@ -1,38 +1,58 @@
-import time
 import string
-import requests
+import statistics
+import time
 
-# === Time-Based Attack Script ===
-def perform_attack():
-    url = "http://127.0.0.1:5000/validate_hash"
+from check_string_methods import *
+
+nombre_essai = 500
+nombre_echantillon = 500
+
+
+def perform_attack(securised=False):
     extracted = ""
+    amplification_factor = 1e6
 
-    while True:  # Continue until the full secret is extracted
-        max_time = 0
+    while True:
+        max_median_time = 0
         next_char = ''
 
-        for char in string.ascii_letters + string.digits:  # Test alphanumeric characters
-            test_input = extracted + char
+        """On verifie que le prochain caractere testé n'est pas le dernier"""
+        for char in string.ascii_letters + string.digits:
 
-            start = time.time()
-            response = requests.get(url, params={"input": test_input})
-            elapsed = time.time() - start
+            if securised:
+                if check_string_hashed(extracted + char):
+                    print(f"Password: {extracted + char}")
+                    return {extracted + char}
+            else:
+                if check_string(extracted + char):
+                    print(f"Password: {extracted + char}")
+                    return {extracted + char}
 
-            # Check if this character caused the longest delay
-            if elapsed > max_time:
-                max_time = elapsed
+            """On ajoute un caractere suplémentaire a la string afin de forcer une boucle de plus"""
+            test_input = extracted + char + "a"
+            times = []
+            for _ in range(
+                    nombre_echantillon):  # Nombre d'echantillon pour la medianne (la moyenne aurait pu être utilisée)
+                start = time.perf_counter()
+                for _ in range(nombre_essai):  # Nombre d'essai pour obtenir une valeur du calcul de la médianne
+                    if securised:
+                        check_string_hashed(test_input)
+                    else:
+                        check_string(test_input)
+                elapsed = time.perf_counter() - start
+                times.append(elapsed * amplification_factor)
+
+            median_time = statistics.median(times)  # Calcul de la médiane
+
+            if median_time > max_median_time:
+                max_median_time = median_time
                 next_char = char
 
-        # Append the character with the longest delay
         extracted += next_char
-        print(f"Extracted so far: {extracted}")
+        print(f"Valeur actuelle: {extracted}")
 
-        # Check if the full secret is discovered
-        response = requests.get(url, params={"input": extracted})
-        if response.status_code == 200:
-            print(f"Secret fully discovered: {extracted}")
-            break
 
 if __name__ == "__main__":
     print("Starting the attack...")
-    perform_attack()
+    print("MDP a trouver: ", SECRET, " Version Hashée: ", hashlib.sha256(SECRET.encode()).hexdigest())
+    print(perform_attack())  # Pour executer la fonction sécurisée print(perform_attack(True))
